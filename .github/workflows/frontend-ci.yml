@@ -1,0 +1,36 @@
+name: Frontend CI/CD
+
+on:
+  push:
+    branches: [ "dev", "staging", "master" ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build project
+        run: npm run build
+
+      - name: Build Docker image
+        run: docker build -t ${{ github.repository }}:${{ github.ref_name }} .
+
+      - name: Push to DockerHub
+        run: |
+          echo "${{ secrets.DOCKERHUB_TOKEN }}" | docker login -u ${{ secrets.DOCKERHUB_USER }} --password-stdin
+          docker push ${{ github.repository }}:${{ github.ref_name }}
+
+      - name: Deploy to AWS
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@${{ secrets.AWS_HOST }} \
+          "cd /opt/app/frontend-web && git pull origin ${{ github.ref_name }} && docker compose up -d --build"
