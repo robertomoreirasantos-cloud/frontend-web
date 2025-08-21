@@ -1,0 +1,39 @@
+name: Frontend Simple Deploy
+
+on:
+  push:
+    branches: [ "dev" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy Frontend with API URL
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            echo "🛑 Parando container antigo"
+            docker stop frontend-web-dev || true
+            docker rm frontend-web-dev || true
+            
+            echo "🚀 Iniciando novo container com API URL"
+            docker run -d \
+              --name frontend-web-dev \
+              -p 3000:80 \
+              -e REACT_APP_API_URL=http://18.216.181.169:8080 \
+              --restart unless-stopped \
+              ${{ secrets.DOCKER_USERNAME }}/frontend-web:dev
+            
+            sleep 5
+            
+            if docker ps | grep -q frontend-web-dev; then
+              echo "✅ Frontend rodando com sucesso!"
+              echo "🔗 Acesse: http://18.216.181.169:3000"
+              echo "🔗 API configurada para: http://18.216.181.169:8080"
+            else
+              echo "❌ Erro ao iniciar frontend"
+              exit 1
+            fi
