@@ -45,7 +45,7 @@ jobs:
 
       - name: Build and push Docker image
         run: |
-          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend-web:${{ steps.vars.outputs.TAG }} ./frontend-web
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/frontend-web:${{ steps.vars.outputs.TAG }} .
           docker push ${{ secrets.DOCKER_USERNAME }}/frontend-web:${{ steps.vars.outputs.TAG }}
 
   deploy:
@@ -53,14 +53,6 @@ jobs:
     needs: build-and-push
     if: github.event_name == 'push' && (github.ref_name == 'dev' || github.ref_name == 'staging' || github.ref_name == 'master')
     steps:
-      - name: Debug Info
-        run: |
-          echo "Event name: ${{ github.event_name }}"
-          echo "Ref name: ${{ github.ref_name }}"
-          echo "Tag: ${{ needs.build-and-push.outputs.tag }}"
-          echo "Port: ${{ needs.build-and-push.outputs.port }}"
-          echo "Container: ${{ needs.build-and-push.outputs.container_name }}"
-          
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.0.0
         with:
@@ -68,10 +60,8 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # Pull da nova imagem
             docker pull ${{ secrets.DOCKER_USERNAME }}/frontend-web:${{ needs.build-and-push.outputs.tag }}
             
-            # Para apenas containers que usam a porta específica deste ambiente
             PORT=${{ needs.build-and-push.outputs.port }}
             CONTAINER_USING_PORT=$(docker ps --format "table {{.Names}}\t{{.Ports}}" | grep ":${PORT}->" | awk '{print $1}' | head -1)
             
@@ -81,18 +71,13 @@ jobs:
               docker rm $CONTAINER_USING_PORT || true
             fi
             
-            # Para e remove APENAS o container específico deste ambiente
             echo "🛑 Parando container específico: ${{ needs.build-and-push.outputs.container_name }}"
             docker stop ${{ needs.build-and-push.outputs.container_name }} || true
             docker rm ${{ needs.build-and-push.outputs.container_name }} || true
             
-            # Remove apenas imagens não utilizadas (não afeta outros containers)
             docker image prune -f
-            
-            # Aguarda um pouco para liberar a porta
             sleep 3
             
-            # Executa o novo container (assumindo que o frontend roda na porta 80 internamente)
             echo "🚀 Iniciando container: ${{ needs.build-and-push.outputs.container_name }} na porta ${{ needs.build-and-push.outputs.port }}"
             docker run -d \
               --name ${{ needs.build-and-push.outputs.container_name }} \
@@ -100,14 +85,11 @@ jobs:
               --restart unless-stopped \
               ${{ secrets.DOCKER_USERNAME }}/frontend-web:${{ needs.build-and-push.outputs.tag }}
             
-            # Aguarda alguns segundos para o container inicializar
             sleep 10
             
-            # Mostra todos os containers rodando (para debug)
             echo "📋 Containers atualmente rodando:"
             docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}"
             
-            # Verifica se o container está rodando
             if docker ps | grep -q ${{ needs.build-and-push.outputs.container_name }}; then
               echo "✅ Container ${{ needs.build-and-push.outputs.container_name }} está rodando na porta ${{ needs.build-and-push.outputs.port }}"
               docker logs --tail 10 ${{ needs.build-and-push.outputs.container_name }}
