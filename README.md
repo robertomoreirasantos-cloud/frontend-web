@@ -5,3 +5,4 @@ Testando frontend unificado 🚀
 Teste de pipeline em dev 🚀
 Teste de pipeline em dev 🚀
 Clean test - Thu Aug 21 15:27:57 UTC 2025
+Teste de pipeline em dev 🚀
